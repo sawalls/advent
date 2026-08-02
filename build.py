@@ -3,6 +3,7 @@ import re
 import os
 import subprocess
 import sys
+import argparse
 
 def convert_octal(match):
     oct_str = match.group(1)
@@ -46,6 +47,8 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
         "' '": "1H ",
     }
 
+    posix_dat_path = advdat_formatted_path.replace('\\', '/')
+
     for line_idx, line in enumerate(lines):
         orig_line = line.rstrip('\r\n')
         
@@ -60,7 +63,6 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
         processed = re.sub(r'"([0-7]+)', convert_octal, processed)
 
         # Replace TYPE and ACCEPT statements
-        # ACCEPT label, list --> READ(*, label) list
         m_accept = re.match(r'^(\s*\d*\s*)ACCEPT\s+(\d+)\s*,\s*(.*)$', processed, re.IGNORECASE)
         if m_accept:
             label_prefix = m_accept.group(1)
@@ -68,8 +70,6 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
             args = m_accept.group(3)
             processed = f"{label_prefix}READ(*, {fmt_num}) {args}"
 
-        # TYPE label, args --> WRITE(*, label) args
-        # TYPE label      --> WRITE(*, label)
         m_type_args = re.match(r'^(\s*\d*\s*)TYPE\s+(\d+)\s*,\s*(.*)$', processed, re.IGNORECASE)
         m_type_noargs = re.match(r'^(\s*\d*\s*)TYPE\s+(\d+)\s*$', processed, re.IGNORECASE)
         if m_type_args:
@@ -115,7 +115,7 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
 	IMPLICIT INTEGER(A-Z)
 	INTEGER N
 	CHARACTER*(*) M
-	OPEN(UNIT=N, FILE='{advdat_formatted_path}', STATUS='OLD')
+	OPEN(UNIT=N, FILE='{posix_dat_path}', STATUS='OLD')
 	END
 
 	REAL FUNCTION MYRAN(QZ)
@@ -131,13 +131,58 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
     with open(output_path, 'w') as f:
         f.write('\n'.join(out_lines))
 
+def compile_target(prep_f, target, output_bin):
+    compiler = 'gfortran'
+    cmd = []
+    if target == 'windows':
+        if subprocess.run(['which', 'x86_64-w64-mingw32-gfortran'], capture_output=True).returncode == 0:
+            compiler = 'x86_64-w64-mingw32-gfortran'
+        elif sys.platform != 'win32':
+            print("Warning: x86_64-w64-mingw32-gfortran not found. Falling back to default gfortran.")
+        cmd = [
+            compiler,
+            '-static',
+            '-fdec',
+            '-fdefault-integer-8',
+            '-finit-local-zero',
+            '-std=legacy',
+            prep_f,
+            '-o', output_bin
+        ]
+    else:
+        cmd = [
+            compiler,
+            '-fdec',
+            '-fdefault-integer-8',
+            '-finit-local-zero',
+            '-std=legacy',
+            prep_f,
+            '-o', output_bin
+        ]
+
+    print(f"Compiling [{target}] with {compiler} -> {output_bin}...")
+    res = subprocess.run(cmd)
+    if res.returncode == 0:
+        print(f"Successfully built '{output_bin}'!")
+    else:
+        print(f"Compilation failed for target '{target}'.")
+        sys.exit(res.returncode)
+
 def main():
+    parser = argparse.ArgumentParser(description="Build Colossal Cave Adventure")
+    parser.add_argument(
+        '--target',
+        choices=['native', 'windows', 'all'],
+        default='native',
+        help="Target platform build choice (default: native)"
+    )
+    args = parser.parse_args()
+
     src_f4 = os.path.join('src', 'advf4')
     src_dat = os.path.join('src', 'advdat')
     build_dir = 'build'
     prep_f = os.path.join(build_dir, 'adv_prep.f')
     formatted_dat = os.path.join(build_dir, 'advdat_formatted')
-    output_bin = 'advent'
 
     print("Preprocessing advdat...")
     preprocess_advdat(src_dat, formatted_dat)
@@ -145,22 +190,15 @@ def main():
     print("Preprocessing advf4...")
     preprocess_advf4(src_f4, prep_f, formatted_dat)
 
-    print("Compiling with gfortran...")
-    cmd = [
-        'gfortran',
-        '-fdec',
-        '-fdefault-integer-8',
-        '-finit-local-zero',
-        '-std=legacy',
-        prep_f,
-        '-o', output_bin
-    ]
-    res = subprocess.run(cmd)
-    if res.returncode == 0:
-        print(f"Successfully built '{output_bin}'!")
-    else:
-        print("Compilation failed.")
-        sys.exit(res.returncode)
+    if args.target == 'native':
+        native_bin = 'advent.exe' if sys.platform == 'win32' else 'advent'
+        compile_target(prep_f, 'native', native_bin)
+    elif args.target == 'windows':
+        compile_target(prep_f, 'windows', 'advent.exe')
+    elif args.target == 'all':
+        native_bin = 'advent.exe' if sys.platform == 'win32' else 'advent'
+        compile_target(prep_f, 'native', native_bin)
+        compile_target(prep_f, 'windows', 'advent-windows.exe')
 
 if __name__ == '__main__':
     main()
