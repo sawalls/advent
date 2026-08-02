@@ -46,13 +46,13 @@ jobs:
       - name: Test Execution (Linux / macOS)
         if: runner.os != 'Windows'
         run: |
-          printf "YES\nWEST\nQUIT\n" | ./advent
+          printf "YES\nWEST\n" | ./advent
 
       - name: Test Execution (Windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          printf "YES\nWEST\nQUIT\n" | ./advent.exe
+          printf "YES\nWEST\n" | ./advent.exe
 
       - name: Prepare Artifact Name
         shell: bash

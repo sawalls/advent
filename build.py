@@ -88,6 +88,20 @@ def preprocess_advf4(input_path, output_path, advdat_formatted_path):
             label_prefix = m_pause.group(1)
             processed = f"{label_prefix}CONTINUE"
 
+        # Treat closed stdin as a normal exit instead of a Fortran runtime error.
+        if re.match(
+            r'^\s*\d*\s*READ\(\*,\s*1\)\s+\(A\(I\),\s*I=1,4\)',
+            processed,
+            re.IGNORECASE,
+        ):
+            processed = re.sub(
+                r'READ\(\*,\s*1\)',
+                'READ(*, 1, IOSTAT=IOS)',
+                processed,
+                flags=re.IGNORECASE,
+            )
+            processed += "\n\tIF (IOS.NE.0) STOP"
+
         # Fix PDP-10 bare G format specifiers using I5
         processed = re.sub(r'FORMAT\s*\(\s*G\s*\)', 'FORMAT(I5)', processed, flags=re.IGNORECASE)
         processed = re.sub(r'FORMAT\s*\(\s*1G\s*,\s*20A5\s*\)', 'FORMAT(I5,20A5)', processed, flags=re.IGNORECASE)
