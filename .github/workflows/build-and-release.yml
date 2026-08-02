@@ -7,6 +7,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Build (${{ matrix.os }})
@@ -34,7 +37,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-x86_64-gcc-fortran
+          install: mingw-w64-x86_64-gcc-fortran mingw-w64-x86_64-python
 
       - name: Build Advent Binary (Linux / macOS)
         if: runner.os != 'Windows'
@@ -45,7 +48,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          python3 build.py
+          python build.py
 
       - name: Test Execution (Linux / macOS)
         if: runner.os != 'Windows'
