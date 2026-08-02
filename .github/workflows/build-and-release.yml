@@ -48,7 +48,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          python build.py
+          python build.py --target windows
 
       - name: Test Execution (Linux / macOS)
         if: runner.os != 'Windows'
